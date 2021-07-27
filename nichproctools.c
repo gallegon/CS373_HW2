@@ -186,19 +186,62 @@ int list_executable_pages(char* pid) {
 }
 
 int read_mem(char* pid) {
-	char mem_path[256];
+	char mem_path[256], maps_path[256];
 	memset(mem_path, '\0', 256);
+	memset(maps_path, '\0', 256);
 
 	// generate the string to the maps file to see the memory pages
 	strcat(mem_path, "/proc/");
 	strcat(mem_path, pid);
 	strcat(mem_path, "/mem");
+	strcat(maps_path, "/proc/");
+	strcat(maps_path, pid);
+	strcat(maps_path, "/maps");
 	
-	int fd = open(mem_path, O_RDONLY);
+	//int fd = open(mem_path, O_RDONLY);
+	
+	FILE* fd = fopen(maps_path, "r");	
 
+	if (maps_path != NULL) {
+		// will be useful for sscanf
+		char mem_range[256], mem_start[256], mem_end[256], junk_1[256], junk_2[256], junk_3[256];
+		char perms[256], module[256];
+
+		// for getline
+		char* line = NULL;
+		size_t len = 0;
+		ssize_t nread;
+
+		/* get a line from the maps file, read the whitespace separated values into
+		*  the appropriate values.  For this function we care about the perms string
+		*  and we want to print the module associated with it (on the same line
+		* from getline
+		*/
+		while ((nread = getline(&line, &len, fd)) != -1) {
+			sscanf(line, "%s %s %s %s %s %s", mem_range, perms, junk_1, junk_2, junk_3, module);
+			
+			char *separator = strstr(mem_range, "-");
+			// copy the last value of the range from the separtor onwards, add 1 to pointer
+			// so the '-' isn't included
+			strcpy(mem_end, separator + 1); 
+			*separator = '\0'; // set to null terminator so we can separate the string
+			strcpy(mem_start, mem_range); // copy the first part of the range now that the end has been "cut off"
+
+			// check if "x" exists in the module string
+			//if (strstr(perms, "r") != NULL) {
+				printf("memory start: %s | memory_end: %s | permissions: %s\n", mem_start, mem_end, perms);
+			//}
+		}
+		free(line);
+		fclose(fd);
+		return 0;		
+	}
+
+	
+#if 0
 	if (fd != -1) {
 		// will be useful for sscanf
-		char junk_1[256]; //junk_2[256], junk_3[256], junk_4[256];
+		char mem_start[256], mem_end[256];// junk_3[256], junk_4[256];
 		//char perms[256], module[256];
 
 		// for getline
@@ -233,6 +276,7 @@ int read_mem(char* pid) {
 		close(fd);
 		return 0;		
 	}
+#endif
 	else {
 		printf("%s", "Process not found\n");
 		return -1;
