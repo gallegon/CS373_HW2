@@ -106,7 +106,7 @@ int list_modules(char* pid) {
 
 	if (maps_path != NULL) {
 		// will be useful for sscanf
-		char junk_1[256], junk_2[256], junk_3[256], junk_4[256];
+		char mem_range[256], junk_2[256], junk_3[256], junk_4[256];
 		char perms[256], module[256];
 
 		// for getline
@@ -118,11 +118,11 @@ int list_modules(char* pid) {
 		// the appropriate values (we only care about the module string here), then 
 		// check if it contains the .so* extension
 		while ((nread = getline(&line, &len, fd)) != -1) {
-			sscanf(line, "%s %s %s %s %s %s", junk_1, perms, junk_2, junk_3, junk_4, module);
+			sscanf(line, "%s %s %s %s %s %s", mem_range, perms, junk_2, junk_3, junk_4, module);
 			
 			// check if the ".so" file extension exists in the module string
 			if (strstr(module, ".so") != NULL) {
-				printf("module: %s\n", module);
+				printf("address range: %s  |  module: [%s]  |  permissions: [%s]\n", mem_range, module, perms);
 			}
 		}
 		free(line);
@@ -154,7 +154,7 @@ int list_executable_pages(char* pid) {
 
 	if (maps_path != NULL) {
 		// will be useful for sscanf
-		char junk_1[256], junk_2[256], junk_3[256], junk_4[256];
+		char mem_range[256], junk_2[256], junk_3[256], junk_4[256];
 		char perms[256], module[256];
 
 		// for getline
@@ -168,11 +168,11 @@ int list_executable_pages(char* pid) {
 		* from getline
 		*/
 		while ((nread = getline(&line, &len, fd)) != -1) {
-			sscanf(line, "%s %s %s %s %s %s", junk_1, perms, junk_2, junk_3, junk_4, module);
+			sscanf(line, "%s %s %s %s %s %s", mem_range, perms, junk_2, junk_3, junk_4, module);
 			
 			// check if "x" exists in the module string
 			if (strstr(perms, "x") != NULL) {
-				printf("module: %s | permissions: %s\n", module, perms);
+				printf("address range: %s  |  module: [%s]  |  permissions: [%s]\n", mem_range, module, perms);
 			}
 		}
 		free(line);
@@ -185,7 +185,7 @@ int list_executable_pages(char* pid) {
 	}
 }
 
-int read_mem(char* pid) {
+int read_mem(char* pid, long int mem_search_start, long int mem_search_end) {
 	char mem_path[256], maps_path[256];
 	memset(mem_path, '\0', 256);
 	memset(maps_path, '\0', 256);
@@ -207,6 +207,10 @@ int read_mem(char* pid) {
 		char mem_range[256], mem_start[256], mem_end[256], junk_1[256], junk_2[256], junk_3[256];
 		char perms[256], module[256];
 
+		//for memory offsets
+		long int low;
+		long int high;
+
 		// for getline
 		char* line = NULL;
 		size_t len = 0;
@@ -227,56 +231,33 @@ int read_mem(char* pid) {
 			*separator = '\0'; // set to null terminator so we can separate the string
 			strcpy(mem_start, mem_range); // copy the first part of the range now that the end has been "cut off"
 
+			low = strtol(mem_start, NULL, 16);
+			high = strtol(mem_end, NULL, 16);
 			// check if "x" exists in the module string
 			//if (strstr(perms, "r") != NULL) {
-				printf("memory start: %s | memory_end: %s | permissions: %s\n", mem_start, mem_end, perms);
+				//printf("memory start: %s | memory_end: %s | low: %ld high: %ld | permissions: %s\n", mem_start, mem_end, low, high, perms);
 			//}
+			if ((mem_search_start >= low) && (mem_search_end <= high)){
+				char* buffer = (char*) malloc((mem_search_end - mem_search_start) * sizeof(char));
+
+				int mem_fd = open(mem_path, O_RDONLY);
+				lseek(mem_fd, mem_search_start, SEEK_SET);
+
+
+				read(mem_fd, buffer, mem_search_end - mem_search_start);
+	
+				printf("memory contents: %s\n", buffer);
+				close(mem_fd);
+				free(buffer);
+			}
 		}
+		
 		free(line);
 		fclose(fd);
 		return 0;		
 	}
 
 	
-#if 0
-	if (fd != -1) {
-		// will be useful for sscanf
-		char mem_start[256], mem_end[256];// junk_3[256], junk_4[256];
-		//char perms[256], module[256];
-
-		// for getline
-		//char* line = NULL;
-		//size_t len = 0;
-		//ssize_t nread;
-		
-		memset(junk_1, '\0', 256);
-
-		while(read(fd, junk_1, 255) != -1) {
-			printf("%s\n", junk_1);
-		}
-		/* get a line from the maps file, read the whitespace separated values into
-		*  the appropriate values.  For this function we care about the perms string
-		*  and we want to print the module associated with it (on the same line
-		* from getline
-		*/
-		#if 0
-		while ((nread = getline(&line, &len, fd)) != -1) {
-			printf("%s\n", line);
-			#if 0
-			sscanf(line, "%s %s %s %s %s %s", junk_1, perms, junk_2, junk_3, junk_4, module);
-			
-			// check if "x" exists in the module string
-			if (strstr(perms, "x") != NULL) {
-				printf("module: %s | permissions: %s\n", module, perms);
-			}
-			#endif
-		}
-		free(line);
-		#endif
-		close(fd);
-		return 0;		
-	}
-#endif
 	else {
 		printf("%s", "Process not found\n");
 		return -1;
@@ -305,9 +286,16 @@ int main(int argc, char** argv) {
 			else if (strcmp(argv[1], "-ep") == 0) {
 				list_executable_pages(argv[2]);
 			}
-			else if (strcmp(argv[1], "-m") == 0) {
-				read_mem(argv[2]);
-			}
+			//else if (strcmp(argv[1], "-m") == 0) {
+			//	read_mem(argv[2]);
+			//}
+		}
+		else if (argc == 5) {
+			if (strcmp(argv[1], "-m") == 0) {
+				long int low_mem_addr = strtol(argv[3], NULL, 16);
+				long int high_mem_addr = strtol(argv[4], NULL, 16);
+				read_mem(argv[2], low_mem_addr, high_mem_addr);
+			}	
 		}
 	
 	}
