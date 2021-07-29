@@ -1,6 +1,6 @@
 /*
  * Author: Nicholai Gallegos
- * CS373 HW3
+ * CS373 HW2
  */
 #include <dirent.h>
 #include <stdio.h>
@@ -295,6 +295,8 @@ void help_page() {
 	printf("-m | read memory for a process\n");
 	printf("usage: ./nichproctools -m [PID] [low memory address] [high memory address]\n");
 	printf("ex: ./nichproctools -m 1221 ff80 ffd4 -- read memory for process 1221 from address 0xff80 to 0xffd4\n");
+	printf("**NOTE** - please use the memory addresses found in the 'address' field of the maps file, these\n");
+	printf("are the addresses displayed when using the -lm or -ep options\n");
 }
 
 int main(int argc, char** argv) {
